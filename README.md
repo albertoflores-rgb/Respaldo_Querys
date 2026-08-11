@@ -31,6 +31,29 @@ Hay dos caminos posibles para traer las queries desde BigQuery:
 2. **Manual**: copiar el SQL de cada query desde el panel "Saved queries" de BigQuery
    Studio y pegarlo aquí como un archivo `.sql` individual, con nombre descriptivo.
 
+## Como pedir el permiso Dataplex (para desbloquear el respaldo automatico)
+
+El permiso que falta es `roles/dataplex.viewer` (o `roles/dataplex.dataReader`) sobre
+`wmt-edw-sandbox`. En Walmart el flujo es via ServiceNow + AD groups, no self-service
+directo en la consola de GCP:
+
+1. Formulario ServiceNow "Active Directory Request Form":
+   https://walmartglobal.service-now.com/wm_sp?id=sc_cat_item_guide&sys_id=b3234c3b4fab8700e4cd49cf0310c7d7
+2. AD group candidato para el sandbox: `gcp-edw-sandbox-user@walmart.com`
+   (ver Confluence: https://confluence.walmart.com/spaces/GDAPFNWSBQ/pages/337003911/Google+Groups+Google+Roles+and+Service+Accounts)
+3. Contexto de gobierno de Dataplex en Walmart (roles admin/developer estan restringidos
+   a proposito; puede requerir proceso de excepcion):
+   https://confluence.walmart.com/spaces/GDODGE/pages/1560921530/Data+Management+Tools+Dataplex
+4. Referencia general de acceso GCP/BigQuery via ServiceNow:
+   https://confluence.walmart.com/spaces/SASRO/pages/2518489554/GCP+Access
+
+Una vez aprobado el acceso, correr de nuevo:
+```
+cd ../bq_migrate
+.venv\Scripts\python.exe bq_migrate.py --source wmt-edw-sandbox --dry-run --output ..\Respaldo_Querys\bq_backups
+```
+y mover el contenido de `saved_queries/` generado hacia este repo.
+
 ## Historial
 
 - 2026-08-11: Se crea el repo. Intento automatizado con `bq_migrate.py` contra
