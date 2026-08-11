@@ -1,6 +1,7 @@
 # Respaldo de Queries — BigQuery
 
 Repositorio de respaldo (versionado con git) de las queries de BigQuery de Alberto Flores.
+Incluye queries de trabajo de SAM's y W2.
 
 >  **Confidencial**: este repo puede contener SQL con nombres de datasets/tablas internas
 > de Walmart. Manténlo **privado** en GitHub y no compartas el link fuera de los canales
