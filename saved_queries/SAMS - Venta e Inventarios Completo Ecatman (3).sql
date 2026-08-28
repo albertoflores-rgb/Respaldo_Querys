@@ -94,6 +94,9 @@ cte_ventas_fisico_diario AS (
 --   Fecha    = sales_order_detail_order_created_date
 --   Tienda   = sales_order_detail_assigned_store_nbr (join -> CLUB_NBR)
 --   Item     = sales_order_detail_item_id_short (join -> ITEM_NBR)
+--   Ordenes  = COUNT(DISTINCT sales_order_detail_order_nbr) -- ordenes
+--             unicas (una orden puede traer varias piezas del mismo
+--             item, o el mismo item en mas de una linea de la orden)
 -- ------------------------------------------------------------
 cte_ventas_com_diario AS (
   SELECT
@@ -101,7 +104,8 @@ cte_ventas_com_diario AS (
     SAFE_CAST(s.sales_order_detail_assigned_store_nbr AS INT64)     AS CLUB_NBR,
     SAFE_CAST(s.sales_order_detail_item_id_short AS INT64)          AS ITEM_NBR,
     SUM(s.sales_order_detail_commercial_sale_qty_base)                 AS Venta_Pzas_Com,
-    SUM(s.sales_order_detail_net_paid_orders_wo_shipping_amount_1)     AS Venta_Pesos_Com
+    SUM(s.sales_order_detail_net_paid_orders_wo_shipping_amount_1)     AS Venta_Pesos_Com,
+    COUNT(DISTINCT s.sales_order_detail_order_nbr)                     AS Ordenes_Com
   FROM `wmt-mx-dl-controlledmgzn-prod.ecom.Sams_Ventas` AS s
   WHERE
     DATE(s.sales_order_detail_order_created_date) BETWEEN date_ini AND date_fin
@@ -126,7 +130,8 @@ cte_ventas_diaria AS (
     COALESCE(f.Venta_Pzas_Fisico, 0)   AS Venta_Pzas_Fisico,
     COALESCE(f.Venta_Pesos_Fisico, 0)  AS Venta_Pesos_Fisico,
     COALESCE(c.Venta_Pzas_Com, 0)      AS Venta_Pzas_Com,
-    COALESCE(c.Venta_Pesos_Com, 0)     AS Venta_Pesos_Com
+    COALESCE(c.Venta_Pesos_Com, 0)     AS Venta_Pesos_Com,
+    COALESCE(c.Ordenes_Com, 0)         AS Ordenes_Com
   FROM cte_ventas_fisico_diario f
   FULL OUTER JOIN cte_ventas_com_diario c
     ON  f.Fecha    = c.Fecha
@@ -218,6 +223,7 @@ SELECT
   T1.Venta_Pesos_Fisico,
   T1.Venta_Pzas_Com,
   T1.Venta_Pesos_Com,
+  T1.Ordenes_Com,
   (T1.Venta_Pzas_Fisico  + T1.Venta_Pzas_Com)  AS Venta_Pzas_Total,
   (T1.Venta_Pesos_Fisico + T1.Venta_Pesos_Com) AS Venta_Pesos_Total,
 
