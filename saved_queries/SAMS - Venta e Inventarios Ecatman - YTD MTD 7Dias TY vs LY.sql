@@ -2,9 +2,12 @@
 -- Ventas_e_Inventarios_SAMS_v3.sql
 -- Canal   : Sam's Club MX — Todos los Clubs (176)
 -- Área    : E-Catman
--- Versión : 3.0 | Ago 2026 — 3 MOMENTOS comparativos TY vs LY
+-- Versión : 3.1 | Ago 2026 — 3 MOMENTOS comparativos TY vs LY
 --           (parte de la versión "Mensual TY vs LY" v1.4, NO del
 --           grano de la versión "Diario TY vs LY")
+--           v3.1: se agrego Crecimiento_Piso_* y Crecimiento_Com_*
+--           (piezas y pesos) por separado, ademas del Crecimiento_*
+--           Total que ya existía.
 --
 -- QUÉ HACE ESTA VERSIÓN (distinto a Mensual y a Diario):
 --   En vez de pivotear por mes calendario (M01..M12) o dejar grano
@@ -319,6 +322,23 @@ SELECT
   (COALESCE(T1.Piso_Pzas_YTDLY,0)  + COALESCE(T3.Com_Pzas_YTDLY,0))  AS Total_Pzas_YTDLY,
   (COALESCE(T1.Piso_Pesos_YTDLY,0) + COALESCE(T3.Com_Pesos_YTDLY,0)) AS Total_Pesos_YTDLY,
 
+  -- Crecimiento por bloque (Piso solo, .com solo) ademas del Total:
+  SAFE_DIVIDE(
+    COALESCE(T1.Piso_Pzas_YTD,0) - COALESCE(T1.Piso_Pzas_YTDLY,0),
+    NULLIF(COALESCE(T1.Piso_Pzas_YTDLY,0), 0)
+  ) AS Crecimiento_Piso_Pzas_YTD,
+  SAFE_DIVIDE(
+    COALESCE(T1.Piso_Pesos_YTD,0) - COALESCE(T1.Piso_Pesos_YTDLY,0),
+    NULLIF(COALESCE(T1.Piso_Pesos_YTDLY,0), 0)
+  ) AS Crecimiento_Piso_Pesos_YTD,
+  SAFE_DIVIDE(
+    COALESCE(T3.Com_Pzas_YTD,0) - COALESCE(T3.Com_Pzas_YTDLY,0),
+    NULLIF(COALESCE(T3.Com_Pzas_YTDLY,0), 0)
+  ) AS Crecimiento_Com_Pzas_YTD,
+  SAFE_DIVIDE(
+    COALESCE(T3.Com_Pesos_YTD,0) - COALESCE(T3.Com_Pesos_YTDLY,0),
+    NULLIF(COALESCE(T3.Com_Pesos_YTDLY,0), 0)
+  ) AS Crecimiento_Com_Pesos_YTD,
   SAFE_DIVIDE(
     (COALESCE(T1.Piso_Pzas_YTD,0) + COALESCE(T3.Com_Pzas_YTD,0)) - (COALESCE(T1.Piso_Pzas_YTDLY,0) + COALESCE(T3.Com_Pzas_YTDLY,0)),
     NULLIF(COALESCE(T1.Piso_Pzas_YTDLY,0) + COALESCE(T3.Com_Pzas_YTDLY,0), 0)
@@ -347,6 +367,23 @@ SELECT
   (COALESCE(T1.Piso_Pzas_MTDLY,0)  + COALESCE(T3.Com_Pzas_MTDLY,0))  AS Total_Pzas_MTDLY,
   (COALESCE(T1.Piso_Pesos_MTDLY,0) + COALESCE(T3.Com_Pesos_MTDLY,0)) AS Total_Pesos_MTDLY,
 
+  -- Crecimiento por bloque (Piso solo, .com solo) ademas del Total:
+  SAFE_DIVIDE(
+    COALESCE(T1.Piso_Pzas_MTD,0) - COALESCE(T1.Piso_Pzas_MTDLY,0),
+    NULLIF(COALESCE(T1.Piso_Pzas_MTDLY,0), 0)
+  ) AS Crecimiento_Piso_Pzas_MTD,
+  SAFE_DIVIDE(
+    COALESCE(T1.Piso_Pesos_MTD,0) - COALESCE(T1.Piso_Pesos_MTDLY,0),
+    NULLIF(COALESCE(T1.Piso_Pesos_MTDLY,0), 0)
+  ) AS Crecimiento_Piso_Pesos_MTD,
+  SAFE_DIVIDE(
+    COALESCE(T3.Com_Pzas_MTD,0) - COALESCE(T3.Com_Pzas_MTDLY,0),
+    NULLIF(COALESCE(T3.Com_Pzas_MTDLY,0), 0)
+  ) AS Crecimiento_Com_Pzas_MTD,
+  SAFE_DIVIDE(
+    COALESCE(T3.Com_Pesos_MTD,0) - COALESCE(T3.Com_Pesos_MTDLY,0),
+    NULLIF(COALESCE(T3.Com_Pesos_MTDLY,0), 0)
+  ) AS Crecimiento_Com_Pesos_MTD,
   SAFE_DIVIDE(
     (COALESCE(T1.Piso_Pzas_MTD,0) + COALESCE(T3.Com_Pzas_MTD,0)) - (COALESCE(T1.Piso_Pzas_MTDLY,0) + COALESCE(T3.Com_Pzas_MTDLY,0)),
     NULLIF(COALESCE(T1.Piso_Pzas_MTDLY,0) + COALESCE(T3.Com_Pzas_MTDLY,0), 0)
@@ -375,6 +412,23 @@ SELECT
   (COALESCE(T1.Piso_Pzas_L7DLY,0)  + COALESCE(T3.Com_Pzas_L7DLY,0))  AS Total_Pzas_L7DLY,
   (COALESCE(T1.Piso_Pesos_L7DLY,0) + COALESCE(T3.Com_Pesos_L7DLY,0)) AS Total_Pesos_L7DLY,
 
+  -- Crecimiento por bloque (Piso solo, .com solo) ademas del Total:
+  SAFE_DIVIDE(
+    COALESCE(T1.Piso_Pzas_L7D,0) - COALESCE(T1.Piso_Pzas_L7DLY,0),
+    NULLIF(COALESCE(T1.Piso_Pzas_L7DLY,0), 0)
+  ) AS Crecimiento_Piso_Pzas_L7D,
+  SAFE_DIVIDE(
+    COALESCE(T1.Piso_Pesos_L7D,0) - COALESCE(T1.Piso_Pesos_L7DLY,0),
+    NULLIF(COALESCE(T1.Piso_Pesos_L7DLY,0), 0)
+  ) AS Crecimiento_Piso_Pesos_L7D,
+  SAFE_DIVIDE(
+    COALESCE(T3.Com_Pzas_L7D,0) - COALESCE(T3.Com_Pzas_L7DLY,0),
+    NULLIF(COALESCE(T3.Com_Pzas_L7DLY,0), 0)
+  ) AS Crecimiento_Com_Pzas_L7D,
+  SAFE_DIVIDE(
+    COALESCE(T3.Com_Pesos_L7D,0) - COALESCE(T3.Com_Pesos_L7DLY,0),
+    NULLIF(COALESCE(T3.Com_Pesos_L7DLY,0), 0)
+  ) AS Crecimiento_Com_Pesos_L7D,
   SAFE_DIVIDE(
     (COALESCE(T1.Piso_Pzas_L7D,0) + COALESCE(T3.Com_Pzas_L7D,0)) - (COALESCE(T1.Piso_Pzas_L7DLY,0) + COALESCE(T3.Com_Pzas_L7DLY,0)),
     NULLIF(COALESCE(T1.Piso_Pzas_L7DLY,0) + COALESCE(T3.Com_Pzas_L7DLY,0), 0)
