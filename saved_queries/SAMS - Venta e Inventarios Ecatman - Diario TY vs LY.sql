@@ -6,7 +6,7 @@
 --           Inventario anexado AL FINAL desde Ventas (antes era
 --           al revés: inventario era la tabla base).
 --
--- QUÉ CAMBIÓ vs (2).sql (versión mensual, mantenida como respaldo):
+-- QUÉ CAMBIÓ vs la versión "Mensual TY vs LY" (mantenida como respaldo):
 --   1) Ya NO se pivotea a columnas M01..M12 / M01LY..M12LY. Cada fila
 --      es un (Fecha, Club, Ítem) con su venta física + .com de ESE día.
 --   2) El JOIN final ahora parte de VENTAS (cte_ventas_diaria) y le
