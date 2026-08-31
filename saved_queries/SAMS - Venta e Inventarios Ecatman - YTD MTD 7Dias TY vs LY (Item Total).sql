@@ -32,11 +32,13 @@
 --      otra con ONSITE_ONHAND_QTY > 0). BigQuery lo permite (no
 --      truena), pero al leer el resultado hay que fijarse en el
 --      ORDEN de las columnas, no solo en el nombre.
---   c) El GROUP BY del bloque de inventario incluye Fecha_Inicio /
---      Fecha_Fin (ITEM_ON_SHELF_DATE / ITEM_OFF_SHELF_DT) además del
---      ítem — si un ítem tiene fechas de alta/baja distintas entre
---      clubes, puede salir más de una fila por ítem. Comportamiento
---      heredado, no corregido aquí.
+--   c) v4.2 (Ago 2026): Fecha_Inicio / Fecha_Fin (ITEM_ON_SHELF_DATE /
+--      ITEM_OFF_SHELF_DT) del bloque de inventario se COMENTARON en
+--      el SELECT de cte_inventario_item y se quitaron del GROUP BY.
+--      Antes, si un ítem tenía fechas de alta/baja distintas entre
+--      clubes, generaba más de una fila por ítem, duplicando ventas
+--      e inventario al hacer el JOIN con T1/T3. Ya corregido: el
+--      grano vuelve a ser 1 fila por ítem.
 --
 -- TABLAS (ventas, igual que v1-v3):
 --   wmt-edw-prod.MX_WC_VM.SKU_DLY_POS             → ventas físicas diarias
@@ -242,8 +244,11 @@ cte_inventario_item AS (
     COALESCE(COUNT((CASE WHEN(g.tipo_tienda = "Club" and a.ONSITE_ONHAND_QTY > 0) THEN a.club_nbr END)), 0) AS Club_con_Inventario_Piso,
 
     -- ── Fechas de vigencia ──────────────────────────────────
-    a.ITEM_ON_SHELF_DATE                                    AS Fecha_Inicio,
-    a.ITEM_OFF_SHELF_DT                                     AS Fecha_Fin,
+    -- Comentadas (v4.2, Ago 2026): Fecha_Inicio/Fecha_Fin generaban
+    -- filas duplicadas por item cuando distintos clubes tenian
+    -- fechas de alta/baja distintas (ver nota del GROUP BY abajo).
+    -- a.ITEM_ON_SHELF_DATE                                 AS Fecha_Inicio,
+    -- a.ITEM_OFF_SHELF_DT                                  AS Fecha_Fin,
     CURRENT_DATE('America/Mexico_City')                     AS Fecha_Corte,
 
     -- ── Valuación ───────────────────────────────────────────
@@ -280,11 +285,11 @@ cte_inventario_item AS (
     -- Categorías Abarrotes e Impulso (descomentar para filtrar)
     --AND b.CATEGORY_NBR IN (41, 43, 46, 49, 53, 68)
 
-  GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,24,25
-  -- (24,25 = Fecha_Inicio/Fecha_Fin: van en el GROUP BY porque no
-  --  estan agregadas, igual que en el query original. Heredado:
-  --  si un item tiene distintas fechas de alta/baja entre clubes,
-  --  puede generar mas de una fila por item -- ver nota en el header.)
+  GROUP BY 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18
+  -- Fecha_Inicio/Fecha_Fin se comentaron arriba y se sacaron de este
+  -- GROUP BY (v4.2): con fechas de alta/baja distintas por club,
+  -- generaban mas de una fila por item -- duplicando ventas e
+  -- inventario en la union con T1/T3. Grano correcto: 1 fila/item.
 )
 
 -- ============================================================
@@ -305,7 +310,8 @@ SELECT
   -- ── Inventario ítem total (snapshot actual) ──────────────
   T2.OHQty_Clubes, T2.OHQty_FC_MX, T2.OHQty_FC_MTY,
   T2.Club_con_Inventario, T2.Club_con_Inventario_Piso,
-  T2.Fecha_Inicio, T2.Fecha_Fin, T2.Fecha_Corte,
+  -- T2.Fecha_Inicio, T2.Fecha_Fin,  -- comentados (v4.2): ya no existen en cte_inventario_item
+  T2.Fecha_Corte,
   T2.Costo_Unit, T2.Precio_Venta,
   T2.OHQty_Clubes_MXN, T2.OHMXN_FC_MX, T2.OHMXN_FC_MTY,
   T2.Semaforo_OH,
