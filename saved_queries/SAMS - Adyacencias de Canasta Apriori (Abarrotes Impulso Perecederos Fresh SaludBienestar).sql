@@ -61,11 +61,15 @@
 -- VENTA CRUZADA (nuevo): ademas de encontrar PARES fuertes (arriba), este
 -- script identifica las CANASTAS reales (ordenes) que califican como venta
 -- cruzada -> ordenes del periodo TY_90D que contienen AMBOS items de al
--- menos un par con confianza alta (>= min_confidence_venta_cruzada, 70% por
--- default). Es una barra mucho mas estricta que el min_confidence (5%) usado
--- para detectar "fuerte" en general -- aqui buscamos combos casi
--- deterministicos (cuando compran A, compran B la mayoria de las veces) para
--- señalar transacciones reales, no solo la relacion estadistica entre items.
+-- menos un par con confianza alta (>= min_confidence_venta_cruzada, 30% por
+-- default). Es una barra bastante mas estricta que el min_confidence (5%)
+-- usado para detectar "fuerte" en general (6x mas alta) -- aqui buscamos
+-- combos con afinidad fuerte y consistente, sin caer en el extremo de 70%+
+-- que en la practica solo deja 1 par en todo el universo (validado: a 70%
+-- salen 1 par, a 50% salen 14, a 30% salen 74 -- 30% es el punto donde ya
+-- hay variedad real de combos sin perder el sentido de "barra alta").
+-- Nota: no se incluye membership_nbr en el resultado (no se necesita para
+-- este analisis, es a nivel canasta/item, no de socio).
 -- =============================================================================
 
 DECLARE ty_inicio DATE DEFAULT DATE_SUB(CURRENT_DATE(), INTERVAL 90 DAY);
@@ -78,7 +82,7 @@ DECLARE min_support       FLOAT64 DEFAULT 0.001;  -- 0.1% de las canastas -> pod
 DECLARE min_confidence    FLOAT64 DEFAULT 0.05;   -- 5% mínimo en al menos una dirección (para clasificar un PAR como "fuerte")
 DECLARE min_lift          FLOAT64 DEFAULT 1.2;    -- lift > 1 = compran juntos más de lo esperado por azar
 DECLARE top_n             INT64   DEFAULT 500;    -- aplicado via QUALIFY (LIMIT no acepta variables DECLARE en BigQuery)
-DECLARE min_confidence_venta_cruzada FLOAT64 DEFAULT 0.70;  -- 70%: barra alta para marcar una CANASTA real como venta cruzada
+DECLARE min_confidence_venta_cruzada FLOAT64 DEFAULT 0.30;  -- 30%: barra alta (6x el 5% de "fuerte" general) pero con variedad real (74 pares vs 1 a 70%)
 
 -- -----------------------------------------------------------------------------
 -- 1) Item -> bucket de negocio (dedup: snapshot de catálogo más reciente)
@@ -105,8 +109,9 @@ WHERE rn = 1
 -- -----------------------------------------------------------------------------
 -- 2) Líneas crudas (SIN dedup por item, se necesita la pieza real para el
 --    umbral dinámico) de AMBOS periodos en un solo pase sobre Sams_Ventas,
---    etiquetadas con `periodo`. Incluye membership_nbr/fecha/monto para
---    poder enriquecer después el detalle de canastas de venta cruzada.
+--    etiquetadas con `periodo`. Incluye fecha/monto para poder enriquecer
+--    después el detalle de canastas de venta cruzada (sin membership_nbr,
+--    no se necesita a nivel socio para este analisis).
 -- -----------------------------------------------------------------------------
 CREATE TEMP TABLE lineas_crudas AS
 SELECT
@@ -115,7 +120,6 @@ SELECT
     WHEN v.sales_order_detail_order_created_date BETWEEN ly_inicio AND ly_fin THEN 'LY_MES_ANTERIOR'
   END AS periodo,
   v.sales_order_detail_order_nbr       AS order_nbr,
-  v.sales_order_detail_membership_nbr  AS membership_nbr,
   v.sales_order_detail_order_created_date AS fecha_compra,
   v.sales_order_detail_item_id         AS item_id,
   v.sales_order_detail_item_short_desc AS item_desc,
@@ -133,7 +137,7 @@ WHERE v.Estatus = 'VENTA'
   );
 
 -- -----------------------------------------------------------------------------
--- 3) Resumen por orden (piezas/monto/membresia/fecha) + umbral dinámico de
+-- 3) Resumen por orden (piezas/monto/fecha) + umbral dinámico de
 --    canasta = LA MITAD del promedio de piezas totales por transacción,
 --    sobre el universo calificado (5 buckets, TY+LY combinados)
 -- -----------------------------------------------------------------------------
@@ -141,7 +145,6 @@ CREATE TEMP TABLE resumen_orden AS
 SELECT
   periodo,
   order_nbr,
-  ANY_VALUE(membership_nbr) AS membership_nbr,
   ANY_VALUE(fecha_compra)   AS fecha_compra,
   SUM(piezas)               AS piezas_totales,
   SUM(monto)                AS monto_total
@@ -304,10 +307,10 @@ ORDER BY GREATEST(IFNULL(t.lift_90d, 0), IFNULL(l.lift_ly, 0)) DESC;
 
 -- -----------------------------------------------------------------------------
 -- 9) VENTA CRUZADA: pares de ALTA confianza (>= min_confidence_venta_cruzada,
---    70% default) dentro de TY_90D -- barra mucho mas estricta que el 5% de
---    "fuerte", buscamos combos casi deterministicos, no solo con afinidad
---    estadistica. Se parte de `resultado_ty`, que ya trae TODOS los pares que
---    pasaron la poda Apriori nivel 1 (no solo el top_n del resultado final).
+--    30% default) dentro de TY_90D -- barra mas estricta que el 5% de
+--    "fuerte", buscamos combos con afinidad fuerte y consistente. Se parte
+--    de `resultado_ty`, que ya trae TODOS los pares que pasaron la poda
+--    Apriori nivel 1 (no solo el top_n del resultado final).
 -- -----------------------------------------------------------------------------
 CREATE TEMP TABLE pares_venta_cruzada AS
 SELECT
@@ -324,7 +327,6 @@ WHERE GREATEST(confianza_90d_a_b, confianza_90d_b_a) >= min_confidence_venta_cru
 CREATE TEMP TABLE canastas_venta_cruzada AS
 SELECT
   ro.order_nbr,
-  ro.membership_nbr,
   ro.fecha_compra,
   ro.piezas_totales,
   ro.monto_total,
