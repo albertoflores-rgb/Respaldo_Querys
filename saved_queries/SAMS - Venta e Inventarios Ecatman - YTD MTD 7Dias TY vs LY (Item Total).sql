@@ -2,11 +2,13 @@
 -- Ventas_e_Inventarios_SAMS_v4.sql
 -- Canal   : Sam's Club MX — Todos los Clubs (176)
 -- Área    : E-Catman
--- Versión : 4.1 | Ago 2026 — 3 MOMENTOS comparativos TY vs LY,
+-- Versión : 4.2 | Sep 2026 — 4 MOMENTOS comparativos TY vs LY,
 --           grano ÍTEM TOTAL (SIN detalle Club).
 --           v4.1: se agrego Crecimiento_Piso_* y Crecimiento_Com_*
 --           (piezas y pesos) por separado, ademas del Crecimiento_*
 --           Total que ya existía.
+--           v4.2: se agrego MOMENTO L1D (venta de ayer, un solo dia)
+--           TY vs LY, mismo patron que YTD/MTD/L7D.
 --
 -- QUÉ CAMBIA vs "SAMS - Venta e Inventarios Ecatman - YTD MTD 7Dias
 -- TY vs LY.sql" (la v3.0, grano Club x Ítem):
@@ -79,7 +81,14 @@ DECLARE l7d_ty_fin DATE DEFAULT fecha_ayer;
 DECLARE l7d_ly_ini DATE DEFAULT DATE_SUB(l7d_ty_ini, INTERVAL 1 YEAR);
 DECLARE l7d_ly_fin DATE DEFAULT DATE_SUB(l7d_ty_fin, INTERVAL 1 YEAR);
 
--- Rango global: cubre los 6 sub-rangos de arriba en una sola pasada.
+-- ---- Momento 4: Último día (ayer) ----
+DECLARE l1d_ty_ini DATE DEFAULT fecha_ayer;
+DECLARE l1d_ty_fin DATE DEFAULT fecha_ayer;
+-- LY = mismo dia calendario, un año atrás (mismo criterio que YTD/MTD/L7D)
+DECLARE l1d_ly_ini DATE DEFAULT DATE_SUB(fecha_ayer, INTERVAL 1 YEAR);
+DECLARE l1d_ly_fin DATE DEFAULT DATE_SUB(fecha_ayer, INTERVAL 1 YEAR);
+
+-- Rango global: cubre los 8 sub-rangos de arriba en una sola pasada.
 DECLARE date_ini DATE DEFAULT ytd_ly_ini;
 DECLARE date_fin DATE DEFAULT fecha_ayer;
 
@@ -131,7 +140,13 @@ cte_ventas_fisico_item AS (
     COALESCE(SUM(CASE WHEN v.gregorian_date BETWEEN l7d_ty_ini AND l7d_ty_fin THEN v.piezas_dia END), 0) AS Piso_Pzas_L7D,
     COALESCE(SUM(CASE WHEN v.gregorian_date BETWEEN l7d_ty_ini AND l7d_ty_fin THEN v.pesos_dia  END), 0) AS Piso_Pesos_L7D,
     COALESCE(SUM(CASE WHEN v.gregorian_date BETWEEN l7d_ly_ini AND l7d_ly_fin THEN v.piezas_dia END), 0) AS Piso_Pzas_L7DLY,
-    COALESCE(SUM(CASE WHEN v.gregorian_date BETWEEN l7d_ly_ini AND l7d_ly_fin THEN v.pesos_dia  END), 0) AS Piso_Pesos_L7DLY
+    COALESCE(SUM(CASE WHEN v.gregorian_date BETWEEN l7d_ly_ini AND l7d_ly_fin THEN v.pesos_dia  END), 0) AS Piso_Pesos_L7DLY,
+
+    -- Último día (ayer)
+    COALESCE(SUM(CASE WHEN v.gregorian_date BETWEEN l1d_ty_ini AND l1d_ty_fin THEN v.piezas_dia END), 0) AS Piso_Pzas_L1D,
+    COALESCE(SUM(CASE WHEN v.gregorian_date BETWEEN l1d_ty_ini AND l1d_ty_fin THEN v.pesos_dia  END), 0) AS Piso_Pesos_L1D,
+    COALESCE(SUM(CASE WHEN v.gregorian_date BETWEEN l1d_ly_ini AND l1d_ly_fin THEN v.piezas_dia END), 0) AS Piso_Pzas_L1DLY,
+    COALESCE(SUM(CASE WHEN v.gregorian_date BETWEEN l1d_ly_ini AND l1d_ly_fin THEN v.pesos_dia  END), 0) AS Piso_Pesos_L1DLY
 
   FROM cte_pos_diario v
   INNER JOIN `wmt-edw-prod.MX_WC_VM.ITEM_DESC` b ON v.ITEM_NBR = b.ITEM_NBR
@@ -198,7 +213,17 @@ cte_ventas_com_item AS (
     COALESCE(SUM(CASE WHEN Fecha BETWEEN l7d_ly_ini AND l7d_ly_fin THEN Piezas END), 0)              AS Com_Pzas_L7DLY,
     COALESCE(SUM(CASE WHEN Fecha BETWEEN l7d_ly_ini AND l7d_ly_fin THEN Pesos  END), 0)              AS Com_Pesos_L7DLY,
     COUNT(DISTINCT CASE WHEN Fecha BETWEEN l7d_ly_ini AND l7d_ly_fin THEN Orden_Nbr END)             AS Ordenes_Com_L7DLY,
-    COUNT(DISTINCT CASE WHEN Fecha BETWEEN l7d_ly_ini AND l7d_ly_fin THEN Membresia_Nbr END)         AS Numero_Socios_L7DLY
+    COUNT(DISTINCT CASE WHEN Fecha BETWEEN l7d_ly_ini AND l7d_ly_fin THEN Membresia_Nbr END)         AS Numero_Socios_L7DLY,
+
+    -- Último día (ayer)
+    COALESCE(SUM(CASE WHEN Fecha BETWEEN l1d_ty_ini AND l1d_ty_fin THEN Piezas END), 0)              AS Com_Pzas_L1D,
+    COALESCE(SUM(CASE WHEN Fecha BETWEEN l1d_ty_ini AND l1d_ty_fin THEN Pesos  END), 0)              AS Com_Pesos_L1D,
+    COUNT(DISTINCT CASE WHEN Fecha BETWEEN l1d_ty_ini AND l1d_ty_fin THEN Orden_Nbr END)             AS Ordenes_Com_L1D,
+    COUNT(DISTINCT CASE WHEN Fecha BETWEEN l1d_ty_ini AND l1d_ty_fin THEN Membresia_Nbr END)         AS Numero_Socios_L1D,
+    COALESCE(SUM(CASE WHEN Fecha BETWEEN l1d_ly_ini AND l1d_ly_fin THEN Piezas END), 0)              AS Com_Pzas_L1DLY,
+    COALESCE(SUM(CASE WHEN Fecha BETWEEN l1d_ly_ini AND l1d_ly_fin THEN Pesos  END), 0)              AS Com_Pesos_L1DLY,
+    COUNT(DISTINCT CASE WHEN Fecha BETWEEN l1d_ly_ini AND l1d_ly_fin THEN Orden_Nbr END)             AS Ordenes_Com_L1DLY,
+    COUNT(DISTINCT CASE WHEN Fecha BETWEEN l1d_ly_ini AND l1d_ly_fin THEN Membresia_Nbr END)         AS Numero_Socios_L1DLY
 
   FROM cte_com_raw
   GROUP BY ITEM_NBR
@@ -294,7 +319,7 @@ cte_inventario_item AS (
 
 -- ============================================================
 -- Consulta final: Inventario ÍTEM TOTAL + Venta Física + Venta
--- .com, con los 3 momentos (YTD/MTD/L7D) TY+LY y % de crecimiento,
+-- .com, con los 4 momentos (YTD/MTD/L7D/L1D) TY+LY y % de crecimiento,
 -- TODO agregado a nivel Ítem (sin desglose por Club).
 --   T2 (inventario item) es la base → RIGHT JOIN con T1 (físico)
 --   T3 (.com) se agrega con LEFT JOIN sobre la misma clave
@@ -449,7 +474,52 @@ SELECT
   SAFE_DIVIDE(
     (COALESCE(T1.Piso_Pesos_L7D,0) + COALESCE(T3.Com_Pesos_L7D,0)) - (COALESCE(T1.Piso_Pesos_L7DLY,0) + COALESCE(T3.Com_Pesos_L7DLY,0)),
     NULLIF(COALESCE(T1.Piso_Pesos_L7DLY,0) + COALESCE(T3.Com_Pesos_L7DLY,0), 0)
-  ) AS Crecimiento_Pesos_L7D
+  ) AS Crecimiento_Pesos_L7D,
+
+  -- ══ MOMENTO 4: Último día (ayer) ═════════════════════════
+  COALESCE(T1.Piso_Pzas_L1D, 0)         AS Piso_Pzas_L1D,
+  COALESCE(T1.Piso_Pesos_L1D, 0)        AS Piso_Pesos_L1D,
+  COALESCE(T3.Com_Pzas_L1D, 0)          AS Com_Pzas_L1D,
+  COALESCE(T3.Com_Pesos_L1D, 0)         AS Com_Pesos_L1D,
+  COALESCE(T3.Ordenes_Com_L1D, 0)       AS Ordenes_Com_L1D,
+  COALESCE(T3.Numero_Socios_L1D, 0)     AS Numero_Socios_L1D,
+  (COALESCE(T1.Piso_Pzas_L1D,0)  + COALESCE(T3.Com_Pzas_L1D,0))   AS Total_Pzas_L1D,
+  (COALESCE(T1.Piso_Pesos_L1D,0) + COALESCE(T3.Com_Pesos_L1D,0))  AS Total_Pesos_L1D,
+
+  COALESCE(T1.Piso_Pzas_L1DLY, 0)       AS Piso_Pzas_L1DLY,
+  COALESCE(T1.Piso_Pesos_L1DLY, 0)      AS Piso_Pesos_L1DLY,
+  COALESCE(T3.Com_Pzas_L1DLY, 0)        AS Com_Pzas_L1DLY,
+  COALESCE(T3.Com_Pesos_L1DLY, 0)       AS Com_Pesos_L1DLY,
+  COALESCE(T3.Ordenes_Com_L1DLY, 0)     AS Ordenes_Com_L1DLY,
+  COALESCE(T3.Numero_Socios_L1DLY, 0)   AS Numero_Socios_L1DLY,
+  (COALESCE(T1.Piso_Pzas_L1DLY,0)  + COALESCE(T3.Com_Pzas_L1DLY,0))  AS Total_Pzas_L1DLY,
+  (COALESCE(T1.Piso_Pesos_L1DLY,0) + COALESCE(T3.Com_Pesos_L1DLY,0)) AS Total_Pesos_L1DLY,
+
+  -- Crecimiento por bloque (Piso solo, .com solo) ademas del Total:
+  SAFE_DIVIDE(
+    COALESCE(T1.Piso_Pzas_L1D,0) - COALESCE(T1.Piso_Pzas_L1DLY,0),
+    NULLIF(COALESCE(T1.Piso_Pzas_L1DLY,0), 0)
+  ) AS Crecimiento_Piso_Pzas_L1D,
+  SAFE_DIVIDE(
+    COALESCE(T1.Piso_Pesos_L1D,0) - COALESCE(T1.Piso_Pesos_L1DLY,0),
+    NULLIF(COALESCE(T1.Piso_Pesos_L1DLY,0), 0)
+  ) AS Crecimiento_Piso_Pesos_L1D,
+  SAFE_DIVIDE(
+    COALESCE(T3.Com_Pzas_L1D,0) - COALESCE(T3.Com_Pzas_L1DLY,0),
+    NULLIF(COALESCE(T3.Com_Pzas_L1DLY,0), 0)
+  ) AS Crecimiento_Com_Pzas_L1D,
+  SAFE_DIVIDE(
+    COALESCE(T3.Com_Pesos_L1D,0) - COALESCE(T3.Com_Pesos_L1DLY,0),
+    NULLIF(COALESCE(T3.Com_Pesos_L1DLY,0), 0)
+  ) AS Crecimiento_Com_Pesos_L1D,
+  SAFE_DIVIDE(
+    (COALESCE(T1.Piso_Pzas_L1D,0) + COALESCE(T3.Com_Pzas_L1D,0)) - (COALESCE(T1.Piso_Pzas_L1DLY,0) + COALESCE(T3.Com_Pzas_L1DLY,0)),
+    NULLIF(COALESCE(T1.Piso_Pzas_L1DLY,0) + COALESCE(T3.Com_Pzas_L1DLY,0), 0)
+  ) AS Crecimiento_Pzas_L1D,
+  SAFE_DIVIDE(
+    (COALESCE(T1.Piso_Pesos_L1D,0) + COALESCE(T3.Com_Pesos_L1D,0)) - (COALESCE(T1.Piso_Pesos_L1DLY,0) + COALESCE(T3.Com_Pesos_L1DLY,0)),
+    NULLIF(COALESCE(T1.Piso_Pesos_L1DLY,0) + COALESCE(T3.Com_Pesos_L1DLY,0), 0)
+  ) AS Crecimiento_Pesos_L1D
 
 FROM cte_ventas_fisico_item AS T1
 RIGHT JOIN cte_inventario_item AS T2
