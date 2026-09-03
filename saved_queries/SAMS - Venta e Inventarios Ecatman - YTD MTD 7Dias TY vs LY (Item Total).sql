@@ -2,13 +2,20 @@
 -- Ventas_e_Inventarios_SAMS_v4.sql
 -- Canal   : Sam's Club MX — Todos los Clubs (176)
 -- Área    : E-Catman
--- Versión : 4.2 | Sep 2026 — 4 MOMENTOS comparativos TY vs LY,
+-- Versión : 4.3 | Sep 2026 — 4 MOMENTOS comparativos TY vs LY,
 --           grano ÍTEM TOTAL (SIN detalle Club).
 --           v4.1: se agrego Crecimiento_Piso_* y Crecimiento_Com_*
 --           (piezas y pesos) por separado, ademas del Crecimiento_*
 --           Total que ya existía.
 --           v4.2: se agrego MOMENTO L1D (venta de ayer, un solo dia)
 --           TY vs LY, mismo patron que YTD/MTD/L7D.
+--           v4.3: se agrego Impresiones/Ocurrencias en sitio (Adobe
+--           Analytics, cte_impresiones_item) por Item en los 4
+--           momentos, SOLO TY (sin comparable LY). OJO DE COSTO:
+--           ver advertencia completa junto a cte_impresiones_raw --
+--           esta CTE escanea ~11GB/dia de una tabla externa ORC sin
+--           particion util para el filtro, y el rango YTD puede
+--           sumar ~2.7 TB en una sola corrida.
 --
 -- QUÉ CAMBIA vs "SAMS - Venta e Inventarios Ecatman - YTD MTD 7Dias
 -- TY vs LY.sql" (la v3.0, grano Club x Ítem):
@@ -315,14 +322,67 @@ cte_inventario_item AS (
   -- GROUP BY (v4.2): con fechas de alta/baja distintas por club,
   -- generaban mas de una fila por item -- duplicando ventas e
   -- inventario en la union con T1/T3. Grano correcto: 1 fila/item.
+),
+
+-- ------------------------------------------------------------
+-- CTE 6 (v4.3): Impresiones/Ocurrencias en sitio (Adobe Analytics,
+--   Sam's Club MX) agregadas por Item en los 4 momentos -- SOLO TY,
+--   sin comparable LY (ver advertencia de costo abajo).
+--   Fuente: wmt-intl-cons-mc-mx-prod.mx_csd_secured_dl_tables.sams_mx_csd_adobe_event
+--   Definicion de "impresion" validada contra datos reales
+--   (02-sep-2026, ver "SAMS - Adobe Impresiones Item (Investigacion)
+--   v2.sql"): cada segmento de producto dentro de `prod_lst_txt` en
+--   un hit con chnl_txt IN ('searchResults','browseResults').
+--   Item/SKU: eVar168 dentro de cada segmento (formato Adobe
+--   estandar categoria;producto;qty;precio;eventos;eVars, multiples
+--   productos separados por coma). Los codigos 20256/20258 que
+--   documentaba Confluence NO existen en los datos reales -- no se
+--   usan.
+--
+--   ADVERTENCIA DE COSTO: a diferencia de las ventas (SKU_DLY_POS/
+--   Sams_Ventas, costo fijo ~19.3GB sin importar el rango), esta es
+--   una tabla EXTERNA ORC particionada solo por `ds` -- `chnl_txt`
+--   NO es columna de particion, asi que el filtro obliga a leer esa
+--   columna + `prod_lst_txt` completas por cada dia. Costo real
+--   medido: ~11 GB/dia. El rango YTD (~245 dias) escanea ~2.7 TB EN
+--   ESTA SOLA CTE cada vez que se corre el query completo. Si este
+--   query se automatiza a diario, migrar esta CTE a leer de un
+--   historico local incremental (mismo patron que */historico_app/)
+--   en vez de re-escanear BigQuery cada vez -- pendiente, NO
+--   implementado aqui todavia.
+-- ------------------------------------------------------------
+cte_impresiones_raw AS (
+  SELECT
+    ds,
+    REGEXP_EXTRACT(segment, r'eVar168=([^|;,]+)') AS Item_Nbr_Txt
+  FROM `wmt-intl-cons-mc-mx-prod.mx_csd_secured_dl_tables.sams_mx_csd_adobe_event`,
+  UNNEST(SPLIT(prod_lst_txt, ',')) AS segment
+  WHERE op_cmpny_cd = 'SAMS-MX'
+    AND ds BETWEEN ytd_ty_ini AND fecha_ayer   -- cubre YTD/MTD/L7D/L1D TY en una sola pasada
+    AND chnl_txt IN ('searchResults', 'browseResults')
+    AND prod_lst_txt IS NOT NULL
+    AND segment != ''
+),
+cte_impresiones_item AS (
+  SELECT
+    SAFE_CAST(Item_Nbr_Txt AS INT64) AS ITEM_NBR,
+    COALESCE(SUM(CASE WHEN ds BETWEEN ytd_ty_ini AND ytd_ty_fin THEN 1 END), 0) AS Impresiones_YTD,
+    COALESCE(SUM(CASE WHEN ds BETWEEN mtd_ty_ini AND mtd_ty_fin THEN 1 END), 0) AS Impresiones_MTD,
+    COALESCE(SUM(CASE WHEN ds BETWEEN l7d_ty_ini AND l7d_ty_fin THEN 1 END), 0) AS Impresiones_L7D,
+    COALESCE(SUM(CASE WHEN ds BETWEEN l1d_ty_ini AND l1d_ty_fin THEN 1 END), 0) AS Impresiones_L1D
+  FROM cte_impresiones_raw
+  WHERE Item_Nbr_Txt IS NOT NULL
+  GROUP BY ITEM_NBR
 )
 
 -- ============================================================
 -- Consulta final: Inventario ÍTEM TOTAL + Venta Física + Venta
--- .com, con los 4 momentos (YTD/MTD/L7D/L1D) TY+LY y % de crecimiento,
--- TODO agregado a nivel Ítem (sin desglose por Club).
+-- .com + Impresiones en sitio (Adobe), con los 4 momentos
+-- (YTD/MTD/L7D/L1D) y % de crecimiento (venta) TODO agregado a
+-- nivel Ítem (sin desglose por Club).
 --   T2 (inventario item) es la base → RIGHT JOIN con T1 (físico)
---   T3 (.com) se agrega con LEFT JOIN sobre la misma clave
+--   T3 (.com) y T4 (impresiones Adobe) se agregan con LEFT JOIN
+--   sobre la misma clave
 -- ============================================================
 SELECT
   -- ── Identificadores / dimensiones de Ítem (de T2) ────────
@@ -519,13 +579,23 @@ SELECT
   SAFE_DIVIDE(
     (COALESCE(T1.Piso_Pesos_L1D,0) + COALESCE(T3.Com_Pesos_L1D,0)) - (COALESCE(T1.Piso_Pesos_L1DLY,0) + COALESCE(T3.Com_Pesos_L1DLY,0)),
     NULLIF(COALESCE(T1.Piso_Pesos_L1DLY,0) + COALESCE(T3.Com_Pesos_L1DLY,0), 0)
-  ) AS Crecimiento_Pesos_L1D
+  ) AS Crecimiento_Pesos_L1D,
+
+  -- ══ IMPRESIONES / OCURRENCIAS EN SITIO (Adobe Analytics) ═══
+  -- Proxy validado: producto listado en search/browse. SOLO TY,
+  -- sin comparable LY (ver advertencia de costo en cte_impresiones_raw).
+  COALESCE(T4.Impresiones_YTD, 0) AS Impresiones_YTD,
+  COALESCE(T4.Impresiones_MTD, 0) AS Impresiones_MTD,
+  COALESCE(T4.Impresiones_L7D, 0) AS Impresiones_L7D,
+  COALESCE(T4.Impresiones_L1D, 0) AS Impresiones_L1D
 
 FROM cte_ventas_fisico_item AS T1
 RIGHT JOIN cte_inventario_item AS T2
   ON  T1.ITEM_NBR = T2.Item_Nbr
 LEFT JOIN cte_ventas_com_item AS T3
   ON  T2.Item_Nbr = T3.ITEM_NBR
+LEFT JOIN cte_impresiones_item AS T4
+  ON  T2.Item_Nbr = T4.ITEM_NBR
 
 -- ── Filtros opcionales ────────────────────────────────────
 --WHERE T2.Cat_Nbr IN (41, 43, 46, 49, 53, 68)
