@@ -2,10 +2,14 @@
 -- Venta_Com_Promociones.sql
 -- Canal   : Sam's Club MX .com — Todos los Clubs (176, agregado)
 -- Área    : E-Catman
--- Versión : 2.1 | 02-sep-2026
+-- Versión : 2.2 | 03-sep-2026
 -- Base    : "SAMS - Venta e Inventarios Ecatman - Diario TY vs LY.sql"
 --           (mismas tablas/CTE de venta .com; SIN piso ni inventario
 --           a proposito, esto es solo venta .com).
+--
+-- v2.2: se agregó `nombre_cupon` -- variable DECLARE opcional (default
+--   NULL = sin filtro) para filtrar por nombre de cupón/promoción con
+--   match parcial (LIKE), ej. SET nombre_cupon = 'AGO15'.
 --
 -- v2.1: se agregó `Numero_Socios_Com` (COUNT DISTINCT de membresía)
 --   junto al conteo de órdenes -- mismo caveat de doble conteo que
@@ -55,6 +59,11 @@
 
 DECLARE date_ini DATE DEFAULT DATE(2025, 1, 1);
 DECLARE date_fin DATE DEFAULT DATE_SUB(CURRENT_DATE('America/Mexico_City'), INTERVAL 1 DAY);
+-- Filtro opcional por nombre de cupón/promoción. NULL = sin filtro (trae
+-- TODAS las promos, comportamiento original). Match PARCIAL (LIKE) porque
+-- el nombre real viene embebido en texto libre, ej. 'Ahorra 15% con Cupón
+-- AGO15' -- basta con poner 'AGO15' o 'Cupón' para filtrar.
+DECLARE nombre_cupon STRING DEFAULT NULL;  -- ej: 'AGO15' o 'Cupón'
 
 WITH cte_com_promo_split AS (
   SELECT
@@ -72,6 +81,7 @@ WITH cte_com_promo_split AS (
     AND s.sales_order_detail_commercial_sale_qty_base > 0        -- excluir devoluciones / reversos
     AND s.sales_order_detail_item_id_short IS NOT NULL           -- excluir ghost records
     AND LOWER(TRIM(promo_token)) NOT IN ('null', 'null value', '')  -- descarta placeholders
+    AND (nombre_cupon IS NULL OR TRIM(promo_token) LIKE CONCAT('%', nombre_cupon, '%'))  -- filtro opcional por nombre de cupón
 )
 
 SELECT

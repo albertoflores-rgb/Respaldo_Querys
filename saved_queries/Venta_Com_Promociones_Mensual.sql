@@ -2,8 +2,8 @@
 -- Venta_Com_Promociones_Mensual.sql
 -- Canal   : Sam's Club MX .com — Todos los Clubs (176, agregado)
 -- Área    : E-Catman
--- Versión : 1.0 | 02-sep-2026
--- Base    : Venta_Com_Promociones.sql (v2.1, grano DIARIO) -- este
+-- Versión : 1.1 | 03-sep-2026
+-- Base    : Venta_Com_Promociones.sql (v2.2, grano DIARIO) -- este
 --           archivo es la MISMA lógica de limpieza de promoción,
 --           pero agregado a grano MENSUAL. Es un query APARTE a
 --           propósito -- no se mezcla con el diario en el mismo
@@ -25,12 +25,22 @@
 --   sumar estas columnas entre filas de un mismo ítem/mes para sacar
 --   un total general -- sirve para comparar promociones entre sí.
 --
+-- v1.1: se agregó `nombre_cupon` -- variable DECLARE opcional (default
+--   NULL = sin filtro) para filtrar por nombre de cupón/promoción con
+--   match parcial (LIKE), ej. SET nombre_cupon = 'AGO15'. Mismo cambio
+--   que en la versión diaria.
+--
 -- Rango: 1-ene-2025 -> ayer (2025 completo + 2026 YTD), agregado por
 --   mes calendario (columna Mes, formato YYYY-MM).
 -- ============================================================
 
 DECLARE date_ini DATE DEFAULT DATE(2025, 1, 1);
 DECLARE date_fin DATE DEFAULT DATE_SUB(CURRENT_DATE('America/Mexico_City'), INTERVAL 1 DAY);
+-- Filtro opcional por nombre de cupón/promoción. NULL = sin filtro (trae
+-- TODAS las promos, comportamiento original). Match PARCIAL (LIKE) porque
+-- el nombre real viene embebido en texto libre, ej. 'Ahorra 15% con Cupón
+-- AGO15' -- basta con poner 'AGO15' o 'Cupón' para filtrar.
+DECLARE nombre_cupon STRING DEFAULT NULL;  -- ej: 'AGO15' o 'Cupón'
 
 WITH cte_com_promo_split AS (
   SELECT
@@ -48,6 +58,7 @@ WITH cte_com_promo_split AS (
     AND s.sales_order_detail_commercial_sale_qty_base > 0        -- excluir devoluciones / reversos
     AND s.sales_order_detail_item_id_short IS NOT NULL           -- excluir ghost records
     AND LOWER(TRIM(promo_token)) NOT IN ('null', 'null value', '')  -- descarta placeholders
+    AND (nombre_cupon IS NULL OR TRIM(promo_token) LIKE CONCAT('%', nombre_cupon, '%'))  -- filtro opcional por nombre de cupón
 )
 
 SELECT
