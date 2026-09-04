@@ -31,13 +31,22 @@
 --   SALUD Y BIENESTAR                    -> SALUD Y BIENESTAR
 --   APPAREL / SEASONAL / TECHNOLOGY      -> (EXCLUIDO, es Mercancías Generales)
 --
---  CAVEAT (heredado, sigue aplicando a ambos periodos): el cruce
---   sales_order_detail_item_id = CAST(ITEM_ID AS STRING) contra el
---   snapshot VIGENTE del catálogo solo matchea ~65% del revenue reciente.
---   Para LY el gap puede ser mayor si hubo items descontinuados hace más de
---   un año que ya no aparecen en el catálogo actual -- se documenta, no se
---   corrige aquí (ver Black_Bird.Catalogo_Cat_Compradores como fallback
---   futuro si el gap resulta material).
+--  *** CORREGIDO 03-sep-2026 (antes decia ~65% de match, era un BUG ***
+--   *** de formato, no cobertura real -- ver detalle abajo) ***
+--   sales_order_detail_item_id en Sams_Ventas SIEMPRE viene con 9 digitos
+--   (padded con ceros a la izquierda, validado sobre 12,002,499 filas de
+--   TY_90D: 100% con LENGTH=9). CAST(ITEM_ID AS STRING) en el catalogo NO
+--   preserva ceros a la izquierda (94422 -> '94422', no '000094422') -> el
+--   join viejo (sin LPAD) NUNCA matcheaba los ~469K items del catalogo
+--   (13.5% del total) con menos de 9 digitos, aunque estuvieran vigentes.
+--   Prueba con datos reales (TY_90D, monto total $4,503.8M):
+--     join viejo (sin LPAD):       $2,820.6M matcheado = 62.6%
+--     join corregido (LPAD a 9):   $4,495.3M matcheado = 99.8%
+--   Este script ya usa LPAD(CAST(ITEM_ID AS STRING), 9, '0') en el join.
+--   La cobertura REAL del catalogo es ~99.8% del revenue, no ~65% como se
+--   documentaba antes -- el hallazgo se descubrio corriendo el piloto de
+--   4 anclas (Nutella/Aguacate/Gatorade/Colgate, 2 de ellas con SKU de
+--   <9 digitos) y se propago el fix aqui.
 --
 -- PERIODOS:
 --   TY_90D          = últimos 90 días rodantes (hoy - 90 hasta hoy).
@@ -90,7 +99,7 @@ DECLARE min_confidence_venta_cruzada FLOAT64 DEFAULT 0.30;  -- 30%: barra alta (
 CREATE TEMP TABLE catalogo_bucket AS
 SELECT * FROM (
   SELECT
-    CAST(ITEM_ID AS STRING) AS item_id,
+    LPAD(CAST(ITEM_ID AS STRING), 9, '0') AS item_id,  -- FIX 03-sep-2026: preserva match con formato 9-digitos de Sams_Ventas
     CASE
       WHEN SQUAD = 'GROCERIES' THEN 'ABARROTES'
       WHEN SQUAD = 'IMPULSO' THEN 'IMPULSO'
