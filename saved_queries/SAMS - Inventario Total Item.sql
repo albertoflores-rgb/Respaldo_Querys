@@ -91,11 +91,11 @@ SELECT
 
 FROM `wmt-edw-prod.MX_WC_VM.MDSE_INVENTORY`  AS a
 Left JOIN `wmt-edw-prod.MX_WC_VM.ITEM_DESC`       AS b ON  (a.ITEM_NBR = b.ITEM_NBR)
-Left JOIN `wmt-edw-sandbox.Black_Bird.Catalogo_CatID` AS c ON (b.CATEGORY_NBR = c.cat_id)
+Left JOIN `wmt-mx-dl-controlledmgzn-prod.Black_Bird.Catalogo_CatID` AS c ON (b.CATEGORY_NBR = c.cat_id)
 LEFT JOIN wmt-edw-prod.MX_WC_VM.STORE_INFO AS d ON (a.CLUB_NBR = d.store_NBR)
-LEFT JOIN `wmt-edw-sandbox.Black_Bird.Catalogo_Cat_Compradores` AS e ON (b.CATEGORY_NBR = e.DEPT_NBR)
-LEFT JOIN `wmt-edw-sandbox.Black_Bird.Catalogo_Cat_Subcat` AS f ON (CONCAT (CAST(b.CATEGORY_NBR AS STRING),"-",CAST(b.Sub_CATEGORY_NBR AS STRING)) = f.Cat_SubCat)
-LEFT JOIN `wmt-edw-sandbox.Black_Bird.Catalogo_Clubes` AS g on (a.club_nbr = g.club_nbr)
+LEFT JOIN `wmt-mx-dl-controlledmgzn-prod.Black_Bird.Catalogo_Cat_Compradores` AS e ON (b.CATEGORY_NBR = e.DEPT_NBR)
+LEFT JOIN `wmt-mx-dl-controlledmgzn-prod.Black_Bird.Catalogo_Cat_Subcat` AS f ON (CONCAT (CAST(b.CATEGORY_NBR AS STRING),"-",CAST(b.Sub_CATEGORY_NBR AS STRING)) = f.Cat_SubCat)
+LEFT JOIN `wmt-mx-dl-controlledmgzn-prod.Black_Bird.Catalogo_Clubes` AS g on (a.club_nbr = g.club_nbr)
 
 WHERE a.club_nbr not in (5808 , 6269, 6389,7101,7573,7475,8103,8691)
 AND g.tipo_tienda not in("Staff","Ex CA","Cedis Devoluciones","Transpo","WMG","Medimart","Import","Prueba")

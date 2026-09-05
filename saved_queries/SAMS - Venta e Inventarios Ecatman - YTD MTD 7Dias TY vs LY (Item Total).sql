@@ -31,7 +31,7 @@
 --      itera/optimiza ese bloque, se usa como está.
 --
 -- OJO — cosas heredadas del bloque de inventario que NO se tocaron:
---   a) Usa catálogos de `wmt-edw-sandbox.Black_Bird.*` (Compradores,
+--   a) Usa catálogos de `wmt-mx-dl-controlledmgzn-prod.Black_Bird.*` (Compradores,
 --      Cat_Subcat, Clubes) en vez de los que usan las versiones v1-v3
 --      (`Black_Bird.Catalogo_Cat_Subcat` de controlledmgzn-prod +
 --      `SAMS_MERCH_MX_CLUBES_INFO`). Si este bloque deja de andar por

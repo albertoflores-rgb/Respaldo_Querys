@@ -24,7 +24,7 @@ Inventory_Awaiting_Cost_Amount AS On_Hold_Cost,
 Inventory_Pending_Unit_Quantity AS Pendiente_Units,
 Inventory_Pending_Cost_Amount AS Pendiente_Cost
 
-FROM wmt-edw-sandbox.WM_AD_HOC_MX.AD_HOC_ECOMM_WC_INVT_FC_DLY
+FROM wmt-mx-dl-controlledmgzn-prod.WM_AD_HOC_MX.AD_HOC_ECOMM_WC_INVT_FC_DLY
 Where 
 PARSE_DATE('%d.%m.%Y',Inventory_Date) IN (CURRENT_DATE()) --Inventario del dia
 --Inventory_Date BETWEEN ("2023-11-08") AND CURRENT_DATE --Historico

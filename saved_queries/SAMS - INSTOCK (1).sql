@@ -1,6 +1,6 @@
---DROP TABLE IF EXISTS `wmt-edw-sandbox.WM_AD_HOC_MX.REPORTE_INSTOCK_SAMS_W2`;
+--DROP TABLE IF EXISTS `wmt-mx-dl-controlledmgzn-prod.WM_AD_HOC_MX.REPORTE_INSTOCK_SAMS_W2`;
 
---CREATE TABLE `wmt-edw-sandbox.Black_Bird.REPORTE_INSTOCK_SAMS_W2` AS
+--CREATE TABLE `wmt-mx-dl-controlledmgzn-prod.Black_Bird.REPORTE_INSTOCK_SAMS_W2` AS
 
 SELECT
   -- ── Geografía ──────────────────────────────────────────────────────────────
