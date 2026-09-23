@@ -10,13 +10,21 @@ Incluye queries de trabajo de SAM's y W2.
 ## Estructura
 
 ```
-saved_queries/       -> Queries guardadas en BigQuery Studio (una por archivo .sql)
+saved_queries/       -> Queries guardadas en BigQuery Studio, organizadas por formato:
+                         W2/   -> archivos cuyo nombre empieza por W2
+                         Sams/ -> archivos cuyo nombre empieza por Sams/SAMS o sin prefijo
 scheduled_queries/   -> Scheduled queries propias (si aplica)
 manifest.json         -> Metadata (nombre, proyecto, fecha de export) — se agrega cuando
                          se genera un respaldo automatizado
 ```
 
-## Cómo se alimenta este repo
+Las queries dentro de `saved_queries/` se clasifican por el prefijo del nombre:
+
+- `saved_queries/W2/`: archivos cuyo nombre comienza con `W2`.
+- `saved_queries/Sams/`: archivos cuyo nombre comienza con `Sams`/`SAMS` y archivos sin prefijo.
+
+Al agregar nuevas queries, conserva esta regla para que el respaldo siga ordenado.
+
 
 Hay dos caminos posibles para traer las queries desde BigQuery:
 
