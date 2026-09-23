@@ -33,9 +33,23 @@
 -- en esta v2 -- ver el archivo v1 para el detalle completo.
 -- ============================================================
 
-DECLARE fecha_inicio DATE DEFAULT '2026-09-01';           -- inicio de MTD
-DECLARE fecha_fin    DATE DEFAULT '2026-09-07';            -- AJUSTAR al ultimo dia completo antes de correr (NO usar CURRENT_DATE a ciegas, el dia en curso viene incompleto)
+DECLARE fecha_inicio DATE DEFAULT '2026-09-06';           -- PRUEBA DE 1 SOLO DIA (dia ya cerrado; NO usar 09-07 = hoy, viene incompleto)
+DECLARE fecha_fin    DATE DEFAULT '2026-09-06';            -- mismo dia que fecha_inicio para la prueba de 1 dia
 DECLARE pagina_prefix STRING DEFAULT 'www.sams.com.mx/content/despensa/1580012';
+-- BUG CONFIRMADO 08-sep-2026 (bigquery-explorer, ds=2026-09-06, costo real ~1.8 GB):
+--   page_url_txt viene en DOS formatos mezclados en los datos reales:
+--   unas filas SIN protocolo ('www.sams.com.mx/...') y otras CON
+--   'https://' de prefijo. El filtro original (anclado al inicio con
+--   LIKE pagina_prefix||'%') solo matcheaba el primer formato y
+--   EXCLUIA SILENCIOSAMENTE ~5% de las visitas (2,413 de 45,550 filas
+--   ese dia). Fix: agregar '%' TAMBIEN al inicio del LIKE (ver abajo).
+--   PENDIENTE DE CONFIRMAR (requiere tocar cust_dim, ~205 GB/dia,
+--   necesita luz verde explicita antes de correr): si el filtro de
+--   prop7_raw ('%itemcarousel:%' / '%sponsoredproductcarousel:%')
+--   sigue devolviendo 0 filas incluso con el fix de page_url_txt, el
+--   problema esta ahi (posible mayuscula/minuscula distinta o nombre
+--   de carrusel distinto al esperado) -- validar antes de asumir que
+--   ya quedo arreglado del todo.
 
 -- ------------------------------------------------------------
 -- 1. BASE -- filtra primero por columnas escalares baratas
@@ -66,7 +80,7 @@ WITH base AS (
   FROM `wmt-intl-cons-mc-mx-prod.mx_csd_secured_dl_tables.sams_mx_csd_adobe_event`
   WHERE op_cmpny_cd = 'SAMS-MX'
     AND ds BETWEEN fecha_inicio AND fecha_fin
-    AND page_url_txt LIKE pagina_prefix || '%'
+    AND page_url_txt LIKE '%' || pagina_prefix || '%'   -- FIX 08-sep-2026: '%' al inicio tambien, cubre URLs con y sin 'https://' de prefijo
 ),
 
 -- ------------------------------------------------------------

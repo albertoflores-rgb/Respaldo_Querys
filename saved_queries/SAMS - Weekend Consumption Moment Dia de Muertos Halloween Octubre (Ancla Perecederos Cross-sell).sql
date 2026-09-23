@@ -441,4 +441,64 @@ ORDER BY item_id;
 --   como cross-sell tematico. RECOMENDACION: pull queda en 14 items (6
 --   anclas + 5 Abarrotes + 3 Perecederos), SIN Salud y Bienestar -- mas
 --   chico pero mas honesto que forzar un reemplazo debil.
---   CSV final: bigquery_results/canasta_dia_muertos_14items_POST_EXCLUSION_20260923.csv
+--   CSV intermedio (INCOMPLETO, NO usar como final): bigquery_results/canasta_dia_muertos_14items_POST_EXCLUSION_20260923.csv
+
+-- =============================================================================
+-- CORRECCION URGENTE (23-sep-2026, misma sesion, horas despues): el usuario
+-- aclaro que la canasta SIEMPRE debe tener EXACTAMENTE 20 items -- la
+-- exclusion de los 19 SKUs solo debe QUITARLOS del universo, y el Apriori
+-- debe RECALCULAR/REEMPLAZAR con candidatos reales, nunca reducir el pull
+-- ni eliminar un bucket completo por conveniencia. La version de 14 items de
+-- arriba quedo OBSOLETA -- no se debe usar ni publicar.
+--
+-- Se re-escaneo bigquery_results/pares_fuerte_post_exclusion_20260923.csv
+-- (325 pares con conf>=5%+lift>=1.2, universo YA sin los 19 excluidos) en
+-- busca de 6 candidatos de reemplazo (2 Abarrotes, 2 Perecederos, 2 Salud y
+-- Bienestar) que restauraran el pull a 20 sin repetir ningun SKU excluido:
+--
+--   ABARROTES:
+--     980014852 6 350 ML SALSA PICANTE  <- ancla VERO MIX DULCE, conf 5.14%,
+--       lift 2.73, 129 canastas de evidencia (reemplaza 980002314 Crema Avellana)
+--     000191873 RG 2/500G MOLE XIQUENSE <- ancla MM MINIMUERTO, conf 5.99%,
+--       lift 2.228, 22 canastas (volumen modesto, pero MOLE es plato tradicional
+--       de ofrenda de Dia de Muertos -- defensibilidad tematica genuina;
+--       reemplaza 000718515 Nutrioli Aceite)
+--   PERECEDEROS:
+--     981018204 MINI MAGNUM ALMENDRA    <- ancla MM MINIMUERTO, conf 6.15%,
+--       lift 2.286, 85 canastas (reemplaza 000254784 Huevo Blanco)
+--     000770256 12/100G DANETTE FLAN    <- ancla MM MINIMUERTO, conf 6.40%,
+--       lift 2.38, 86 canastas (reemplaza 980016043 Agua Purificada)
+--   SALUD Y BIENESTAR (bucket restaurado -- NO se elimina por conveniencia):
+--     980014763 MM 6 PACK VELADORA      <- ancla MM 1KG PAN MUERTO, conf 5.32%,
+--       lift 4.334, 19 canastas (volumen modesto, lift muy alto; VELADORAS son
+--       genuinamente tematicas -- ofrenda de Dia de Muertos; reemplaza
+--       000263093 Soft Cotton)
+--     981038338 20PZ VELA LIMONERO      <- ancla VERO MIX DULCE, conf 5.75%,
+--       lift 3.051, 20 canastas (tambien velas, mismo racional tematico;
+--       reemplaza organicamente 000084281 Suavitel DC que ya no calificaba)
+--
+-- Ninguno de los 6 reemplazos pertenece a los 19 SKUs excluidos (validado
+-- programaticamente: 0 overlap). Venta/delta TY vs LY de los 6 se obtuvo con
+-- una query puntual (SELECT directo, sin DECLARE) sobre Sams_Ventas + catalogo
+-- para Oct-2025 vs Oct-2024, mismos filtros Estatus='VENTA' que el resto del
+-- pipeline.
+--
+-- Los dos SKUs de Pan de Muerto (000046531 "1K" y 000186909 "1KG") se
+-- restauran a tratamiento NORMAL (NO se consolidan en una sola fila de
+-- display): el usuario confirmo que, siendo SKUs distintos que pasan las
+-- reglas de Apriori por si solos, deben participar como items independientes
+-- salvo peticion explicita de exclusion (no se pidio). La consolidacion
+-- visual aplicada en la iteracion anterior (14 items) queda revertida.
+--
+-- PULL FINAL RESTAURADO (20 items, validado 0 overlap con excluidos):
+--   FRESH (4): Minimuerto, Pan de Muerto 1K, Pan de Muerto 1KG, Calabaza Halloween
+--   IMPULSO (2): Vero Mix Dulce, Skwinkles Dulces
+--   ABARROTES (7): Zucaritas, Lechera, Mayonesa c/Limon, Heinz Ketchup,
+--                  Pumpkin Spice, Salsa Picante (nuevo), Mole Xiquense (nuevo)
+--   PERECEDEROS (5): Crema Acida, Oaxaca Organico, Delight Pumpkin,
+--                     Mini Magnum Almendra (nuevo), Danette Flan (nuevo)
+--   SALUD Y BIENESTAR (2): MM 6 Pack Veladora (nuevo), 20PZ Vela Limonero (nuevo)
+--
+-- CSV final correcto (usar este, NO el de 14 items):
+--   bigquery_results/canasta_dia_muertos_20items_RESTAURADA_20260923.csv
+-- HTML regenerado: reportes/2026-10_weekend_consumption_dia_muertos/index.html (v5)
