@@ -86,6 +86,32 @@ DECLARE min_confidence_fuerte FLOAT64 DEFAULT 0.05; -- 5% -> clasificar un par c
 DECLARE min_lift          FLOAT64 DEFAULT 1.2;
 DECLARE top_n             INT64   DEFAULT 400;
 
+-- EXCLUSION PERSISTENTE (solicitada 23-sep-2026, re-ejecutada y VALIDADA
+-- 23-sep-2026 via bq CLI -- job padre bqjob_r1389d206c4da2fbc_000001a0cfbd070d_1,
+-- 0 filas en la validacion final): estos 19 SKUs no participan en canastas,
+-- pares, candidatos ni agregados TY/LY de esta rutina. Se aplica despues del
+-- join de catalogo para mantener la llave normalizada.
+-- Identidad completa (bucket + venta) documentada en
+-- weekend_consumption_dia_muertos_exclusiones_20260923.md -- los 19 son,
+-- sin excepcion, staples genericos de mayoreo (agua, leche, papel, jabon,
+-- formula infantil, huevo, uva, pan de caja, vinagre) que aparecen en
+-- cualquier canasta grande sin importar el tema -- ruido real, no senal.
+DECLARE excluded_items ARRAY<STRING> DEFAULT ['000254784','000263093','980002314','981017658','980030166','981000288','981018491','000034289','000954468','981019852','981000289','000930962','980038901','000718515','980006032','980042829','980007591','980016043','000019039'];
+
+-- NOTA "PAN DE MUERTO SIMILARES" (investigado 23-sep-2026, a peticion del
+-- usuario que senalo 000046531/000186909 como "articulos similares"):
+-- diagnostico completo (venta mensual lado a lado, ago-2024 a hoy) confirma
+-- que AMBOS SKUs venden en paralelo todos los meses, sin que uno reemplace
+-- al otro -- NO son un duplicado de catalogo/re-numeracion, son 2 productos
+-- reales y activos (variantes Member's Mark del Pan de Muerto). Por eso NO
+-- se agregan a excluded_items (eso borraria revenue real y 2 de las 4 anclas
+-- de FRESH sin respaldo de dato). La consolidacion pedida por el usuario se
+-- resuelve a nivel de DISPLAY en el HTML (una sola fila combinada), no aqui.
+-- Si el negocio decide por criterio COMERCIAL (no de calidad de dato)
+-- retirar una de las dos variantes del motor completo, activar esta linea
+-- alternativa (reemplazando la de arriba) con el SKU que se quiera fuera:
+-- DECLARE excluded_items ARRAY<STRING> DEFAULT ['000254784','000263093','980002314','981017658','980030166','981000288','981018491','000034289','000954468','981019852','981000289','000930962','980038901','000718515','980006032','980042829','980007591','980016043','000019039','000186909'];
+
 -- -----------------------------------------------------------------------------
 -- 1) Item -> bucket de negocio (dedup catálogo, igual que el query maestro)
 -- -----------------------------------------------------------------------------
@@ -136,6 +162,7 @@ FROM `wmt-mx-dl-controlledmgzn-prod.ecom.Sams_Ventas` v
 INNER JOIN catalogo_bucket cb ON v.sales_order_detail_item_id = cb.item_id
 WHERE v.Estatus = 'VENTA'
   AND v.sales_order_detail_order_nbr IS NOT NULL
+  AND LPAD(CAST(v.sales_order_detail_item_id AS STRING), 9, '0') NOT IN UNNEST(excluded_items)
   AND (
     v.sales_order_detail_order_created_date BETWEEN ty_inicio AND ty_fin
     OR v.sales_order_detail_order_created_date BETWEEN ly_inicio AND ly_fin
@@ -364,3 +391,54 @@ SELECT
 FROM lineas_crudas
 GROUP BY semana_octubre, periodo
 ORDER BY periodo, semana_octubre;
+
+
+-- VALIDACION DE EXCLUSION: debe devolver 0 filas y 0 ventas/piezas
+-- en la salida filtrada del pipeline, no en la fuente cruda.
+SELECT LPAD(CAST(item_id AS STRING), 9, '0') AS item_id,
+       COUNT(*) AS lineas, SUM(piezas) AS piezas,
+       ROUND(SUM(monto),2) AS venta
+FROM lineas_crudas
+WHERE LPAD(CAST(item_id AS STRING), 9, '0') IN UNNEST(excluded_items)
+GROUP BY item_id
+ORDER BY item_id;
+
+-- =============================================================================
+-- RESULTADOS POST-EXCLUSION (corrida real 23-sep-2026, via bq CLI, job padre
+-- bqjob_r1389d206c4da2fbc_000001a0cfbd070d_1) -- documentados aqui para no
+-- repetir el diagnostico. Validacion de exclusion: 0 FILAS (limpio).
+--
+--   umbral_canasta_usado = 7 (sin cambio)
+--   canastas_calificadas_oct_ty_2025 = 170,446 (baja de 192,035 -- efecto
+--     esperado de quitar 19 SKUs de alto volumen: algunas canastas que solo
+--     calificaban gracias a esos SKUs ya no llegan al umbral de 7 items)
+--   canastas_calificadas_oct_ly_2024 = 124,211
+--   items_frecuentes_oct_ty_2025 = 1,734 | pares_generados = 1,172,119
+--   Diagnostico confianza (pares tematicos, sin cambio material vs 09-sep):
+--     >=70%:0 | >=50%:0 | >=40%:1 | >=30%:7 | >=20%:36 | >=10%:108 | >=5%:338
+--     de 8,046 pares tematicos totales
+--
+--   CATEGORIA TY vs LY (recalculado, reemplaza los numeros del 09-sep que
+--   incluian los 19 SKUs de ruido -- ver weekend_consumption_dia_muertos_
+--   exclusiones_20260923.md seccion 1 para la tabla completa):
+--     Fresh +130.62% venta / +88.59% piezas (antes +127.8%/+90.8%)
+--     Perecederos +52.52% venta / +39.14% piezas (antes +52.1%/+38.2%)
+--     Abarrotes +45.65% venta / +33.34% piezas (antes +46.4%/+33.8%)
+--     Impulso +32.16% venta / +25.03% piezas (antes +34.7%/+28.3%, el mayor
+--       ajuste: 4 de los 19 excluidos caian en IMPULSO -- aguas purificadas
+--       mal clasificadas por SQUAD + pan de caja blanco)
+--     Salud y Bienestar +17.28% venta / +10.99% piezas (antes +18.1%/+11.5%)
+--
+--   PULL DE ITEMS: de los 20 originales, 5 fueron excluidos directamente
+--   (000254784 Huevo Blanco, 000263093 Soft Cotton, 980002314 Crema
+--   Avellana, 000718515 Nutrioli Aceite, 980016043 Agua Purificada) y 1 mas
+--   (000084281 Suavitel DC) dejo de cumplir la barra de "fuerte" (conf>=5%+
+--   lift>=1.2) de forma organica tras el recalculo del universo de canastas
+--   -- ya era la senal mas floja del pull original. Los candidatos nuevos de
+--   Salud y Bienestar que si sobreviven la poda (gripa-tos, rastrillos,
+--   desodorante, alimento para perro -- todos jalados solo por el ancla de
+--   dulces) son el mismo tipo de ruido de canasta grande, ninguno defendible
+--   como cross-sell tematico. RECOMENDACION: pull queda en 14 items (6
+--   anclas + 5 Abarrotes + 3 Perecederos), SIN Salud y Bienestar -- mas
+--   chico pero mas honesto que forzar un reemplazo debil.
+--   CSV final: bigquery_results/canasta_dia_muertos_14items_POST_EXCLUSION_20260923.csv
